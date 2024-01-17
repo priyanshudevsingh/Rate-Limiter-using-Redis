@@ -5,16 +5,20 @@ dotenv.config({ path: "./config.env" });
 
 const client = new Redis(process.env.REDIS_SERVICE_URI);
 
-const rateLimitDurationInSeconds = 60 * 1000;
-const maxNumberOfRequest = 5;
+const windowDurationInSeconds = 60;
+const maxRequests = 5;
 
-async function rateLimiter(req, res, next) {
-  const currTime = Date.now();
+async function fixedWindowAlgo_rateLimiter(req, res, next) {
+  const currTime = Math.floor(Date.now() / 1000);
+  const userId = req.ip.replace(/:/g, "_");
+  console.log(userId);
 
-  const result = await client.hgetall("accessData");
+  const key = `rateLimitCntFixed:${userId}`;
+
+  const result = await client.hgetall(key);
 
   if (Object.keys(result).length === 0) {
-    await client.hset("accessData", {
+    await client.hset(key, {
       accessAt: currTime,
       count: 1,
     });
@@ -24,21 +28,21 @@ async function rateLimiter(req, res, next) {
   if (result) {
     const diff = currTime - result["accessAt"];
 
-    if (diff > rateLimitDurationInSeconds) {
-      await client.hset("accessData", {
+    if (diff > windowDurationInSeconds) {
+      await client.hset(key, {
         accessAt: currTime,
         count: 1,
       });
 
       return next();
     } else {
-      if (result["count"] > maxNumberOfRequest) {
+      if (result["count"] >= maxRequests) {
         return res.status(429).json({
           success: false,
-          message: "rate-limited",
+          message: "rate-limited-by-FixedWindowAlgo",
         });
       } else {
-        await client.hset("accessData", {
+        await client.hset(key, {
           count: parseInt(result["count"]) + 1,
         });
         return next();
@@ -47,4 +51,4 @@ async function rateLimiter(req, res, next) {
   }
 }
 
-module.exports = rateLimiter;
+module.exports = fixedWindowAlgo_rateLimiter;
