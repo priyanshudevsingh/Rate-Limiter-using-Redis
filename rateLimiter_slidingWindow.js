@@ -10,7 +10,14 @@ const maxRequests = 5;
 
 async function slidingWindowAlgo_rateLimiter(req, res, next) {
   const currTime = Math.floor(Date.now() / 1000);
-  const userId = req.ip.replace(/:/g, "_");
+  const forwardedFor = req.headers["x-forwarded-for"];
+  const realIp = req.headers["x-real-ip"];
+
+  const userId = (
+    forwardedFor ||
+    realIp ||
+    req.connection.remoteAddress
+  ).replace(/:/g, "_");
   console.log(userId);
 
   const key = `rateLimitCntSliding:${userId}`;
